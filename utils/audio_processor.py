@@ -1,15 +1,14 @@
 import yt_dlp
-from pydub import AudioSegment
 import os
 import subprocess
+import wave
 import imageio_ffmpeg
 
 DOWNLOAD_DIR = 'downloades'
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Set global ffmpeg path for pydub and subprocess
+# Set global ffmpeg path for subprocess
 ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-AudioSegment.converter = ffmpeg_path
 
 def download_youtube_audio(url: str) -> str:
     """Download audio from YouTube and convert to WAV with deterministic filename."""
@@ -84,21 +83,28 @@ def convert_to_wav(input_path: str) -> str:
     return output_path
 
 
+def slice_wav(wav_path: str, segment_seconds: int, suffix: str) -> list[str]:
+    """Split a WAV file into fixed-duration WAV segments using Python's stdlib wave module."""
+    pieces: list[str] = []
+    with wave.open(wav_path, "rb") as src:
+        params = src.getparams()
+        frames_per_piece = max(1, params.framerate * segment_seconds)
+        total_frames = src.getnframes()
+        for i, _ in enumerate(range(0, total_frames, frames_per_piece)):
+            frames = src.readframes(frames_per_piece)
+            if not frames:
+                break
+            piece_path = f"{wav_path}_{suffix}_{i}.wav"
+            with wave.open(piece_path, "wb") as dst:
+                dst.setparams(params)
+                dst.writeframes(frames)
+            pieces.append(piece_path)
+
+    return pieces or [wav_path]
+
+
 def chunk_audio(wav_path: str, chunk_minutes: int = 10) -> list:
-    audio = AudioSegment.from_wav(wav_path)
-    chunk_ms = chunk_minutes * 60 * 1000
-
-    chunks = []
-    for i, start in enumerate(range(0, len(audio), chunk_ms)):
-        chunk = audio[start : start + chunk_ms]
-        chunk_path = f"{wav_path}_chunk_{i}.wav"
-        chunk.export(chunk_path, format="wav")
-        chunks.append(chunk_path)
-
-    if not chunks:
-        chunks = [wav_path]
-
-    return chunks
+    return slice_wav(wav_path, chunk_minutes * 60, "chunk")
 
 
 def process_input(source: str) -> list:
