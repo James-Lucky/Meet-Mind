@@ -43,6 +43,14 @@ from core.rag_engine import build_rag_chain, ask_question
 
 load_dotenv(override=True)
 
+# Sync Streamlit Cloud secrets (st.secrets) into os.environ for core modules
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str) and _k not in os.environ:
+            os.environ[_k] = _v
+except Exception:
+    pass
+
 st.set_page_config(
     page_title="Meet Mind AI Video Assistant",
     page_icon="🎬",
